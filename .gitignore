@@ -1,0 +1,9 @@
+# Sertifikat Keamanan & Kunci Privat
+cert.pfx
+*.pfx
+*.pem
+
+# Environment Variables
+.env
+out/
+node_modules/

@@ -1,7 +1,8 @@
 {
-  "name": "electron-app",
+  "name": "pomgiv",
+  "productName": "PomGiv",
   "version": "1.0.0",
-  "description": "Buat electron app",
+  "description": "Pomodoro App by Giveonaldo",
   "keywords": [
     "electronJs",
     "Desktop",
@@ -15,16 +16,19 @@
     "start": "electron-forge start",
     "test": "jest",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "publish": "electron-forge publish"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",
     "@electron-forge/maker-rpm": "^7.11.2",
     "@electron-forge/maker-squirrel": "^7.11.2",
+    "@electron-forge/maker-wix": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.2",
     "@electron-forge/plugin-fuses": "^7.11.2",
+    "@electron-forge/publisher-github": "^7.11.2",
     "@electron/fuses": "^1.8.0",
     "electron": "^43.1.1"
   },

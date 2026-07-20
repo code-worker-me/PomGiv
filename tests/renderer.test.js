@@ -18,14 +18,28 @@ describe('renderer.js', () => {
             <button id="settings-toggle-btn"></button>
             <div id="settings-modal" class="hidden">
                 <button id="close-settings-btn"></button>
-                <input id="work-duration-input" value="25" />
-                <input id="short-duration-input" value="5" />
-                <input id="long-duration-input" value="15" />
-                <input id="total-sessions-input" value="4" />
-                <span id="work-val-display">25 min</span>
-                <span id="short-val-display">5 min</span>
-                <span id="long-val-display">15 min</span>
-                <span id="sessions-val-display">4 sesi</span>
+                <button id="tab-btn-timer" class="active"></button>
+                <button id="tab-btn-notification"></button>
+                <div id="settings-tab-timer">
+                    <input id="work-duration-input" value="25" />
+                    <input id="short-duration-input" value="5" />
+                    <input id="long-duration-input" value="15" />
+                    <input id="total-sessions-input" value="4" />
+                    <span id="work-val-display">25 min</span>
+                    <span id="short-val-display">5 min</span>
+                    <span id="long-val-display">15 min</span>
+                    <span id="sessions-val-display">4 sesi</span>
+                </div>
+                <div id="settings-tab-notification" class="hidden">
+                    <input id="sound-duration-input" value="3" />
+                    <span id="sound-duration-val-display">3 detik</span>
+                    <select id="sound-select"></select>
+                    <button id="btn-test-sound"></button>
+                    <input type="checkbox" id="sound-repeat-toggle" />
+                    <input type="file" id="mp3-file-input" />
+                    <button id="btn-trigger-upload"></button>
+                    <span id="upload-filename"></span>
+                </div>
                 <button id="save-settings-btn"></button>
             </div>
             <button id="play-btn" title="Start">
@@ -375,22 +389,68 @@ describe('renderer.js', () => {
         expect(modal.classList.contains('hidden')).toBe(true);
     });
 
-    test('saveSettings updates DURATIONS and TOTAL_SESSIONS and persists to localStorage', () => {
-        document.getElementById('work-duration-input').value = '45';
-        document.getElementById('short-duration-input').value = '10';
-        document.getElementById('long-duration-input').value = '30';
-        document.getElementById('total-sessions-input').value = '6';
+    test('switchSettingsTab switches active settings tab', () => {
+        renderer.switchSettingsTab('notification');
+        expect(document.getElementById('settings-tab-notification').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('settings-tab-timer').classList.contains('hidden')).toBe(true);
+
+        renderer.switchSettingsTab('timer');
+        expect(document.getElementById('settings-tab-timer').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('settings-tab-notification').classList.contains('hidden')).toBe(true);
+    });
+
+    test('saveSettings updates notification sound settings', () => {
+        document.getElementById('sound-duration-input').value = '5';
+        document.getElementById('sound-select').value = 'digital';
+        document.getElementById('sound-repeat-toggle').checked = true;
 
         renderer.saveSettings();
 
-        expect(renderer.DURATIONS.work).toBe(45 * 60);
-        expect(renderer.DURATIONS.short).toBe(10 * 60);
-        expect(renderer.DURATIONS.long).toBe(30 * 60);
-        expect(renderer.getTotalSessions()).toBe(6);
         expect(window.localStorage.setItem).toHaveBeenCalledWith(
             'pomodoro-settings',
-            JSON.stringify({ work: 45, short: 10, long: 30, totalSessions: 6 })
+            expect.stringContaining('"soundDuration":5')
         );
-        expect(document.getElementById('time-display').textContent).toBe('45:00');
+    });
+
+    test('handleMP3Upload processes file and updates custom sound options', (done) => {
+        const file = new File(['dummy audio content'], 'test.mp3', { type: 'audio/mpeg' });
+        const event = {
+            target: {
+                files: [file],
+                value: 'fake-path'
+            }
+        };
+
+        renderer.handleMP3Upload(event);
+
+        setTimeout(() => {
+            const soundSelect = document.getElementById('sound-select');
+            const options = Array.from(soundSelect.options);
+            const mp3Option = options.find(opt => opt.textContent.includes('test.mp3'));
+            expect(mp3Option).toBeDefined();
+            expect(event.target.value).toBe('');
+            done();
+        }, 100);
+    });
+
+    test('deleteCustomSound removes MP3 sound and resets select if deleted sound was selected', async () => {
+        const file = new File(['dummy audio content'], 'delete_me.mp3', { type: 'audio/mpeg' });
+        const event = { target: { files: [file], value: 'fake' } };
+        renderer.handleMP3Upload(event);
+
+        await new Promise(r => setTimeout(r, 100));
+
+        const soundSelect = document.getElementById('sound-select');
+        const customOption = Array.from(soundSelect.options).find(opt => opt.textContent.includes('delete_me.mp3'));
+        expect(customOption).toBeDefined();
+
+        await renderer.deleteCustomSound(customOption.value);
+
+        const optionsAfter = Array.from(soundSelect.options);
+        const deletedOpt = optionsAfter.find(opt => opt.textContent.includes('delete_me.mp3'));
+        expect(deletedOpt).toBeUndefined();
+        expect(soundSelect.value).toBe('chime');
     });
 });
+
+

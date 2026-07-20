@@ -39,6 +39,11 @@ const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const saveSettingsBtn = document.getElementById('save-settings-btn');
 
+const tabBtnTimer = document.getElementById('tab-btn-timer');
+const tabBtnNotification = document.getElementById('tab-btn-notification');
+const settingsTabTimer = document.getElementById('settings-tab-timer');
+const settingsTabNotification = document.getElementById('settings-tab-notification');
+
 const workDurationInput = document.getElementById('work-duration-input');
 const shortDurationInput = document.getElementById('short-duration-input');
 const longDurationInput = document.getElementById('long-duration-input');
@@ -48,6 +53,18 @@ const workValDisplay = document.getElementById('work-val-display');
 const shortValDisplay = document.getElementById('short-val-display');
 const longValDisplay = document.getElementById('long-val-display');
 const sessionsValDisplay = document.getElementById('sessions-val-display');
+
+// Notification Settings Elements
+const soundDurationInput = document.getElementById('sound-duration-input');
+const soundDurationValDisplay = document.getElementById('sound-duration-val-display');
+const soundSelect = document.getElementById('sound-select');
+const btnTestSound = document.getElementById('btn-test-sound');
+const btnDeleteSound = document.getElementById('btn-delete-sound');
+const soundRepeatToggle = document.getElementById('sound-repeat-toggle');
+const mp3FileInput = document.getElementById('mp3-file-input');
+const btnTriggerUpload = document.getElementById('btn-trigger-upload');
+const uploadFilename = document.getElementById('upload-filename');
+const customSoundsList = document.getElementById('custom-sounds-list');
 
 // Timer State Configuration (in seconds)
 let DURATIONS = {
@@ -64,6 +81,13 @@ let timeLeft = DURATIONS.work;
 let totalDuration = DURATIONS.work;
 let timerInterval = null;
 let isRunning = false;
+
+// Notification Sound Configuration
+let soundDuration = 3;
+let soundSelectVal = 'chime';
+let soundRepeat = false;
+let customSounds = [];
+let playingAudioInstance = null;
 
 // Task List State
 let tasks = [];
@@ -133,6 +157,26 @@ function setupEventListeners() {
     if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettingsModal);
     if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
 
+    if (tabBtnTimer) tabBtnTimer.addEventListener('click', () => switchSettingsTab('timer'));
+    if (tabBtnNotification) tabBtnNotification.addEventListener('click', () => switchSettingsTab('notification'));
+
+    if (btnTestSound) btnTestSound.addEventListener('click', playNotificationSound);
+    if (soundSelect) {
+        soundSelect.addEventListener('change', updateDeleteButtonVisibility);
+    }
+    if (btnDeleteSound) {
+        btnDeleteSound.addEventListener('click', () => {
+            const val = soundSelect ? soundSelect.value : soundSelectVal;
+            if (val && val.startsWith('custom_')) {
+                deleteCustomSound(val);
+            }
+        });
+    }
+    if (btnTriggerUpload && mp3FileInput) {
+        btnTriggerUpload.addEventListener('click', () => mp3FileInput.click());
+        mp3FileInput.addEventListener('change', handleMP3Upload);
+    }
+
     if (settingsModal) {
         settingsModal.addEventListener('click', (e) => {
             if (e.target === settingsModal) {
@@ -154,21 +198,36 @@ function setupEventListeners() {
     if (totalSessionsInput && sessionsValDisplay) {
         totalSessionsInput.addEventListener('input', (e) => sessionsValDisplay.textContent = `${e.target.value} sesi`);
     }
+    if (soundDurationInput && soundDurationValDisplay) {
+        soundDurationInput.addEventListener('input', (e) => soundDurationValDisplay.textContent = `${e.target.value} detik`);
+    }
 }
 
 // Settings Persistence and Management
-function loadSettings() {
-    const savedSettings = localStorage.getItem('pomodoro-settings');
-    if (savedSettings) {
-        try {
-            const settings = JSON.parse(savedSettings);
-            if (settings.work) DURATIONS.work = Math.min(60, Math.max(5, settings.work)) * 60;
-            if (settings.short) DURATIONS.short = Math.min(15, Math.max(1, settings.short)) * 60;
-            if (settings.long) DURATIONS.long = Math.min(60, Math.max(5, settings.long)) * 60;
-            if (settings.totalSessions) TOTAL_SESSIONS = Math.min(8, Math.max(1, settings.totalSessions));
-        } catch (e) {
-            console.error("Failed to parse pomodoro-settings:", e);
+async function loadSettings() {
+    let settings = null;
+    if (typeof loadDBSettings === 'function') {
+        settings = await loadDBSettings();
+    } else {
+        const savedSettings = localStorage.getItem('pomodoro-settings');
+        if (savedSettings) {
+            try { settings = JSON.parse(savedSettings); } catch (e) {}
         }
+    }
+
+    if (settings) {
+        if (settings.work) DURATIONS.work = Math.min(60, Math.max(5, settings.work)) * 60;
+        if (settings.short) DURATIONS.short = Math.min(15, Math.max(1, settings.short)) * 60;
+        if (settings.long) DURATIONS.long = Math.min(60, Math.max(5, settings.long)) * 60;
+        if (settings.totalSessions) TOTAL_SESSIONS = Math.min(8, Math.max(1, settings.totalSessions));
+        if (settings.soundDuration) soundDuration = Math.min(15, Math.max(1, settings.soundDuration));
+        if (settings.soundSelectVal) soundSelectVal = settings.soundSelectVal;
+        if (typeof settings.soundRepeat === 'boolean') soundRepeat = settings.soundRepeat;
+    }
+
+    if (typeof loadDBSounds === 'function') {
+        customSounds = await loadDBSounds();
+        populateSoundOptions();
     }
 
     timeLeft = DURATIONS[currentMode];
@@ -191,6 +250,13 @@ function syncSettingsInputUI() {
     if (shortValDisplay) shortValDisplay.textContent = `${shortMin} min`;
     if (longValDisplay) longValDisplay.textContent = `${longMin} min`;
     if (sessionsValDisplay) sessionsValDisplay.textContent = `${TOTAL_SESSIONS} sesi`;
+
+    if (soundDurationInput) soundDurationInput.value = soundDuration;
+    if (soundDurationValDisplay) soundDurationValDisplay.textContent = `${soundDuration} detik`;
+    if (soundRepeatToggle) soundRepeatToggle.checked = soundRepeat;
+
+    populateSoundOptions();
+    if (soundSelect) soundSelect.value = soundSelectVal;
 }
 
 function saveSettings() {
@@ -200,18 +266,33 @@ function saveSettings() {
     const shortVal = Math.min(15, Math.max(1, parseInt(shortDurationInput.value, 10) || 5));
     const longVal = Math.min(60, Math.max(5, parseInt(longDurationInput.value, 10) || 15));
     const sessionsVal = Math.min(8, Math.max(1, parseInt(totalSessionsInput.value, 10) || 4));
+    const durationVal = Math.min(15, Math.max(1, parseInt(soundDurationInput ? soundDurationInput.value : 3, 10) || 3));
+    const selectedSound = soundSelect ? soundSelect.value : 'chime';
+    const repeatVal = soundRepeatToggle ? soundRepeatToggle.checked : false;
 
     DURATIONS.work = workVal * 60;
     DURATIONS.short = shortVal * 60;
     DURATIONS.long = longVal * 60;
     TOTAL_SESSIONS = sessionsVal;
+    soundDuration = durationVal;
+    soundSelectVal = selectedSound;
+    soundRepeat = repeatVal;
 
-    localStorage.setItem('pomodoro-settings', JSON.stringify({
+    const settingsObj = {
         work: workVal,
         short: shortVal,
         long: longVal,
-        totalSessions: sessionsVal
-    }));
+        totalSessions: sessionsVal,
+        soundDuration: durationVal,
+        soundSelectVal: selectedSound,
+        soundRepeat: repeatVal
+    };
+
+    if (typeof saveDBSettings === 'function') {
+        saveDBSettings(settingsObj);
+    } else {
+        localStorage.setItem('pomodoro-settings', JSON.stringify(settingsObj));
+    }
 
     if (currentSession > TOTAL_SESSIONS) {
         currentSession = TOTAL_SESSIONS;
@@ -225,14 +306,143 @@ function saveSettings() {
     closeSettingsModal();
 }
 
+function switchSettingsTab(tab) {
+    if (tabBtnTimer && tabBtnNotification && settingsTabTimer && settingsTabNotification) {
+        if (tab === 'timer') {
+            tabBtnTimer.classList.add('active');
+            tabBtnNotification.classList.remove('active');
+            settingsTabTimer.classList.remove('hidden');
+            settingsTabNotification.classList.add('hidden');
+        } else {
+            tabBtnNotification.classList.add('active');
+            tabBtnTimer.classList.remove('active');
+            settingsTabNotification.classList.remove('hidden');
+            settingsTabTimer.classList.add('hidden');
+        }
+    }
+}
+
+function updateDeleteButtonVisibility() {
+    if (!btnDeleteSound || !soundSelect) return;
+    const currentVal = soundSelect.value;
+    if (currentVal && currentVal.startsWith('custom_')) {
+        btnDeleteSound.classList.remove('hidden');
+    } else {
+        btnDeleteSound.classList.add('hidden');
+    }
+}
+
+function renderCustomSoundsList() {
+    if (!customSoundsList) return;
+    customSoundsList.innerHTML = '';
+
+    if (customSounds.length === 0) {
+        customSoundsList.innerHTML = '<span class="empty-sound-text">Belum ada file MP3 tersimpan.</span>';
+        return;
+    }
+
+    customSounds.forEach(sound => {
+        const item = document.createElement('div');
+        item.className = 'custom-sound-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'custom-sound-item-name';
+        nameSpan.textContent = `🎵 ${sound.name}`;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-mp3-item';
+        removeBtn.title = 'Hapus MP3';
+        removeBtn.innerHTML = '&#10005;';
+        removeBtn.addEventListener('click', () => deleteCustomSound(sound.id));
+
+        item.appendChild(nameSpan);
+        item.appendChild(removeBtn);
+        customSoundsList.appendChild(item);
+    });
+}
+
+async function deleteCustomSound(soundId) {
+    customSounds = customSounds.filter(s => s.id !== soundId);
+    if (typeof deleteDBSound === 'function') {
+        await deleteDBSound(soundId);
+    }
+
+    if (soundSelectVal === soundId) {
+        soundSelectVal = 'chime';
+    }
+
+    populateSoundOptions();
+    saveSettings();
+}
+
+function populateSoundOptions() {
+    if (!soundSelect) return;
+    const currentVal = soundSelect.value || soundSelectVal;
+    soundSelect.innerHTML = `
+        <option value="chime">Synthesized Chime (Default)</option>
+        <option value="digital">Digital Beep</option>
+        <option value="gentle">Gentle Bell</option>
+    `;
+
+    customSounds.forEach(sound => {
+        const opt = document.createElement('option');
+        opt.value = sound.id;
+        opt.textContent = `[MP3] ${sound.name}`;
+        soundSelect.appendChild(opt);
+    });
+
+    if (currentVal && soundSelect.querySelector(`option[value="${currentVal}"]`)) {
+        soundSelect.value = currentVal;
+    } else {
+        soundSelect.value = 'chime';
+        soundSelectVal = 'chime';
+    }
+
+    updateDeleteButtonVisibility();
+    renderCustomSoundsList();
+}
+
+function handleMP3Upload(e) {
+    if (!e.target || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            let dataUrl = event.target.result;
+            if (typeof dataUrl === 'string' && (dataUrl.startsWith('data:application/octet-stream') || !dataUrl.startsWith('data:audio/'))) {
+                dataUrl = dataUrl.replace(/^data:[^;]*;/, 'data:audio/mpeg;');
+            }
+            const newSound = {
+                id: 'custom_' + Date.now(),
+                name: file.name,
+                dataUrl: dataUrl
+            };
+            customSounds.push(newSound);
+            if (typeof saveDBSound === 'function') {
+                await saveDBSound(newSound);
+            }
+            populateSoundOptions();
+            if (soundSelect) soundSelect.value = newSound.id;
+            soundSelectVal = newSound.id;
+            if (uploadFilename) uploadFilename.textContent = `File di-upload: ${file.name}`;
+            saveSettings();
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    }
+}
+
 function openSettingsModal() {
     syncSettingsInputUI();
+    switchSettingsTab('timer');
     if (settingsModal) {
         settingsModal.classList.remove('hidden');
     }
 }
 
 function closeSettingsModal() {
+    stopActiveNotificationSound();
     if (settingsModal) {
         settingsModal.classList.add('hidden');
     }
@@ -430,7 +640,7 @@ function updatePlayIcon(playing) {
 // Notifications and Audio
 function timerFinished() {
     pauseTimer();
-    playChime();
+    playNotificationSound();
     showNotification();
     
     if (currentMode === 'work') {
@@ -441,6 +651,114 @@ function timerFinished() {
     setTimeout(() => {
         skipSession();
     }, 1500);
+}
+
+function stopActiveNotificationSound() {
+    if (playingAudioInstance) {
+        try {
+            playingAudioInstance.pause();
+            playingAudioInstance.currentTime = 0;
+        } catch (e) {}
+        playingAudioInstance = null;
+    }
+}
+
+function playNotificationSound() {
+    stopActiveNotificationSound();
+
+    const selectedValue = soundSelect ? soundSelect.value : soundSelectVal;
+    const durationMs = soundDuration * 1000;
+    const isRepeat = soundRepeatToggle ? soundRepeatToggle.checked : soundRepeat;
+
+    const customSound = customSounds.find(s => s.id === selectedValue);
+
+    if (customSound || (selectedValue && (selectedValue.startsWith('data:audio') || selectedValue.startsWith('data:application')))) {
+        let audioUrl = customSound ? customSound.dataUrl : selectedValue;
+        if (typeof audioUrl === 'string' && (audioUrl.startsWith('data:application/octet-stream') || (!audioUrl.startsWith('data:audio/') && audioUrl.startsWith('data:')))) {
+            audioUrl = audioUrl.replace(/^data:[^;]*;/, 'data:audio/mpeg;');
+        }
+        try {
+            const audio = new Audio(audioUrl);
+            audio.loop = isRepeat;
+            playingAudioInstance = audio;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    console.error('Audio playback error:', e);
+                    playTonePattern('chime', durationMs, isRepeat);
+                });
+            }
+
+            setTimeout(() => {
+                if (playingAudioInstance === audio) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    playingAudioInstance = null;
+                }
+            }, durationMs);
+        } catch (e) {
+            console.error('Failed to play custom audio:', e);
+            playTonePattern('chime', durationMs, isRepeat);
+        }
+    } else if (selectedValue === 'digital') {
+        playTonePattern('digital', durationMs, isRepeat);
+    } else if (selectedValue === 'gentle') {
+        playTonePattern('gentle', durationMs, isRepeat);
+    } else {
+        // Default chime
+        playTonePattern('chime', durationMs, isRepeat);
+    }
+}
+
+function playTonePattern(type, durationMs, isRepeat) {
+    const startTime = Date.now();
+    const intervalMs = type === 'digital' ? 300 : 800;
+
+    function triggerOnce() {
+        if (type === 'digital') {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(1046.5, ctx.currentTime);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (e) {}
+        } else if (type === 'gentle') {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.7);
+            } catch (e) {}
+        } else {
+            playChime();
+        }
+    }
+
+    triggerOnce();
+
+    if (isRepeat) {
+        const intervalId = setInterval(() => {
+            if (Date.now() - startTime >= durationMs) {
+                clearInterval(intervalId);
+            } else {
+                triggerOnce();
+            }
+        }, intervalMs);
+    }
 }
 
 // Synthesize a clean bell/chime sound using Web Audio API (cross-platform, self-contained)
@@ -507,20 +825,29 @@ function showNotification() {
 }
 
 // Task List Functions
-function loadTasks() {
-    const storedTasks = localStorage.getItem('pomodoro-tasks');
-    if (storedTasks) {
-        try {
-            tasks = JSON.parse(storedTasks);
-            renderTasks();
-        } catch (e) {
-            tasks = [];
+async function loadTasks() {
+    if (typeof loadDBTasks === 'function') {
+        tasks = await loadDBTasks();
+        renderTasks();
+    } else {
+        const storedTasks = localStorage.getItem('pomodoro-tasks');
+        if (storedTasks) {
+            try {
+                tasks = JSON.parse(storedTasks);
+                renderTasks();
+            } catch (e) {
+                tasks = [];
+            }
         }
     }
 }
 
 function saveTasks() {
-    localStorage.setItem('pomodoro-tasks', JSON.stringify(tasks));
+    if (typeof saveDBTasks === 'function') {
+        saveDBTasks(tasks);
+    } else {
+        localStorage.setItem('pomodoro-tasks', JSON.stringify(tasks));
+    }
 }
 
 function getMinSession(task) {
@@ -662,7 +989,7 @@ function addNewTask(textOverride, sessionsOverride) {
         : [currentSession];
 
     const newTask = {
-        id: Date.now().toString(),
+        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
         text: text,
         completed: false,
         sessions: taskSessions
@@ -838,6 +1165,10 @@ if (typeof module !== 'undefined' && module.exports) {
         openTaskVerifyModal,
         closeTaskVerifyModal,
         confirmTaskVerification,
+        playNotificationSound,
+        switchSettingsTab,
+        handleMP3Upload,
+        deleteCustomSound,
         getTotalSessions: () => TOTAL_SESSIONS,
         setTotalSessions: (val) => { TOTAL_SESSIONS = val; },
         getCurrentSession: () => currentSession,

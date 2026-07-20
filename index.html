@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8" />
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'" />
-    <meta http-equiv="X-Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' data: blob:" />
+    <meta http-equiv="X-Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; media-src 'self' data: blob:" />
     <title>Pomodoro Focus Timer</title>
     <link rel="stylesheet" href="./style.css">
 </head>
@@ -85,44 +85,105 @@
     <div class="modal-overlay hidden" id="settings-modal">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Timer Settings</h3>
+                <h3>Settings</h3>
                 <button class="btn-close-modal" id="close-settings-btn" title="Close">&times;</button>
             </div>
+            <div class="settings-nav-tabs">
+                <button class="nav-tab-btn active" id="tab-btn-timer">Timer</button>
+                <button class="nav-tab-btn" id="tab-btn-notification">Notifikasi</button>
+            </div>
             <div class="modal-body">
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="work-duration-input">Waktu Belajar (Fokus)</label>
-                        <span class="setting-val-badge" id="work-val-display">25 min</span>
+                <!-- Tab 1: Timer Settings -->
+                <div class="settings-tab-content" id="settings-tab-timer">
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="work-duration-input">Waktu Belajar (Fokus)</label>
+                            <span class="setting-val-badge" id="work-val-display">25 min</span>
+                        </div>
+                        <input type="range" id="work-duration-input" class="setting-range" min="5" max="60" value="25" step="1" />
+                        <div class="range-limits"><span>5m</span><span>60m</span></div>
                     </div>
-                    <input type="range" id="work-duration-input" class="setting-range" min="5" max="60" value="25" step="1" />
-                    <div class="range-limits"><span>5m</span><span>60m</span></div>
+
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="short-duration-input">Istirahat Pendek (Short Break)</label>
+                            <span class="setting-val-badge" id="short-val-display">5 min</span>
+                        </div>
+                        <input type="range" id="short-duration-input" class="setting-range" min="1" max="15" value="5" step="1" />
+                        <div class="range-limits"><span>1m</span><span>15m</span></div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="long-duration-input">Istirahat Panjang (Long Break)</label>
+                            <span class="setting-val-badge" id="long-val-display">15 min</span>
+                        </div>
+                        <input type="range" id="long-duration-input" class="setting-range" min="5" max="60" value="15" step="1" />
+                        <div class="range-limits"><span>5m</span><span>60m</span></div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="total-sessions-input">Jumlah Sesi Pomodoro</label>
+                            <span class="setting-val-badge" id="sessions-val-display">4 sesi</span>
+                        </div>
+                        <input type="range" id="total-sessions-input" class="setting-range" min="1" max="8" value="4" step="1" />
+                        <div class="range-limits"><span>1 sesi</span><span>8 sesi</span></div>
+                    </div>
                 </div>
 
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="short-duration-input">Istirahat Pendek (Short Break)</label>
-                        <span class="setting-val-badge" id="short-val-display">5 min</span>
+                <!-- Tab 2: Notification Settings -->
+                <div class="settings-tab-content hidden" id="settings-tab-notification">
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="sound-duration-input">Lama Notifikasi Berbunyi</label>
+                            <span class="setting-val-badge" id="sound-duration-val-display">3 detik</span>
+                        </div>
+                        <input type="range" id="sound-duration-input" class="setting-range" min="1" max="15" value="3" step="1" />
+                        <div class="range-limits"><span>1s</span><span>15s</span></div>
                     </div>
-                    <input type="range" id="short-duration-input" class="setting-range" min="1" max="15" value="5" step="1" />
-                    <div class="range-limits"><span>1m</span><span>15m</span></div>
-                </div>
 
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="long-duration-input">Istirahat Panjang (Long Break)</label>
-                        <span class="setting-val-badge" id="long-val-display">15 min</span>
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label for="sound-select">Suara Notifikasi</label>
+                            <div class="sound-action-btns">
+                                <button type="button" class="btn-test-sound" id="btn-test-sound" title="Test Suara">
+                                    &#9654; Test
+                                </button>
+                                <button type="button" class="btn-delete-sound hidden" id="btn-delete-sound" title="Hapus MP3 Ini">
+                                    &#128465; Hapus MP3
+                                </button>
+                            </div>
+                        </div>
+                        <select id="sound-select" class="setting-select">
+                            <option value="chime">Synthesized Chime (Default)</option>
+                            <option value="digital">Digital Beep</option>
+                            <option value="gentle">Gentle Bell</option>
+                        </select>
                     </div>
-                    <input type="range" id="long-duration-input" class="setting-range" min="5" max="60" value="15" step="1" />
-                    <div class="range-limits"><span>5m</span><span>60m</span></div>
-                </div>
 
-                <div class="setting-group">
-                    <div class="setting-label-row">
-                        <label for="total-sessions-input">Jumlah Sesi Pomodoro</label>
-                        <span class="setting-val-badge" id="sessions-val-display">4 sesi</span>
+                    <div class="setting-group setting-toggle-row">
+                        <label for="sound-repeat-toggle">Ulangi Suara (Repeat Notification)</label>
+                        <input type="checkbox" id="sound-repeat-toggle" class="setting-checkbox" />
                     </div>
-                    <input type="range" id="total-sessions-input" class="setting-range" min="1" max="8" value="4" step="1" />
-                    <div class="range-limits"><span>1 sesi</span><span>8 sesi</span></div>
+
+                    <div class="setting-group">
+                        <div class="setting-label-row">
+                            <label>Upload Suara MP3 Baru</label>
+                        </div>
+                        <div class="upload-mp3-box">
+                            <input type="file" id="mp3-file-input" accept=".mp3,audio/mpeg,audio/mp3,audio/*" style="display: none;" />
+                            <button type="button" class="btn-upload-mp3" id="btn-trigger-upload">+ Pilih File MP3</button>
+                            <span class="upload-filename" id="upload-filename">Belum ada file dipilih</span>
+                        </div>
+                    </div>
+
+                    <div class="setting-group" id="custom-sounds-group">
+                        <div class="setting-label-row">
+                            <label>Daftar File MP3 Tersimpan</label>
+                        </div>
+                        <div id="custom-sounds-list" class="custom-sounds-list"></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -170,6 +231,7 @@
         </div>
     </div>
 </body>
+<script src="./db.js"></script>
 <script src="./renderer.js"></script>
 
 </html>

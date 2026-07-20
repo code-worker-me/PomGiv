@@ -8,6 +8,7 @@ jest.mock('electron', () => ({
     ipcRenderer: {
         invoke: jest.fn(),
         send: jest.fn(),
+        on: jest.fn(),
     },
 }));
 

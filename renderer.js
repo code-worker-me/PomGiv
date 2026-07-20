@@ -66,6 +66,35 @@ const btnTriggerUpload = document.getElementById('btn-trigger-upload');
 const uploadFilename = document.getElementById('upload-filename');
 const customSoundsList = document.getElementById('custom-sounds-list');
 
+// Analytics Elements
+const analyticsToggleBtn = document.getElementById('analytics-toggle-btn');
+const analyticsModal = document.getElementById('analytics-modal');
+const closeAnalyticsBtn = document.getElementById('close-analytics-btn');
+const analyticsTabToday = document.getElementById('analytics-tab-today');
+const analyticsTabWeek = document.getElementById('analytics-tab-week');
+const statTotalFocus = document.getElementById('stat-total-focus');
+const statTotalSessions = document.getElementById('stat-total-sessions');
+const statTotalTasks = document.getElementById('stat-total-tasks');
+const analyticsChartCanvas = document.getElementById('analytics-chart');
+
+// Analytics State
+let todayAnalytics = {
+    date: getLocalDateString(),
+    totalFocusSeconds: 0,
+    completedSessions: 0,
+    completedTasks: 0,
+    hourlyFocusSeconds: {}
+};
+let analyticsChartInstance = null;
+let currentAnalyticsTab = 'today';
+
+function getLocalDateString(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // Timer State Configuration (in seconds)
 let DURATIONS = {
     work: 25 * 60,
@@ -97,6 +126,7 @@ let pendingTaskText = '';
 function init() {
     loadTasks();
     loadSettings();
+    loadTodayAnalytics();
     updateDisplay();
     updateSessionUI();
     setupEventListeners();
@@ -109,6 +139,19 @@ function init() {
 
 // Event Listeners Setup
 function setupEventListeners() {
+    // Analytics
+    if (analyticsToggleBtn) analyticsToggleBtn.addEventListener('click', openAnalyticsModal);
+    if (closeAnalyticsBtn) closeAnalyticsBtn.addEventListener('click', closeAnalyticsModal);
+    if (analyticsTabToday) analyticsTabToday.addEventListener('click', () => switchAnalyticsTab('today'));
+    if (analyticsTabWeek) analyticsTabWeek.addEventListener('click', () => switchAnalyticsTab('week'));
+    if (analyticsModal) {
+        analyticsModal.addEventListener('click', (e) => {
+            if (e.target === analyticsModal) {
+                closeAnalyticsModal();
+            }
+        });
+    }
+
     // Mode Switchers
     if (modeWorkBtn) modeWorkBtn.addEventListener('click', () => switchMode('work'));
     if (modeShortBtn) modeShortBtn.addEventListener('click', () => switchMode('short'));
@@ -118,6 +161,9 @@ function setupEventListeners() {
     if (playBtn) playBtn.addEventListener('click', toggleTimer);
     if (resetBtn) resetBtn.addEventListener('click', resetTimer);
     if (skipBtn) skipBtn.addEventListener('click', skipSession);
+    if (window.versions && typeof window.versions.onToggleTimer === 'function') {
+        window.versions.onToggleTimer(() => toggleTimer());
+    }
 
     // Tasks
     if (addTaskBtn) addTaskBtn.addEventListener('click', openTaskSessionModal);
@@ -259,7 +305,7 @@ function syncSettingsInputUI() {
     if (soundSelect) soundSelect.value = soundSelectVal;
 }
 
-function saveSettings() {
+function saveSettings(closeModal = true) {
     if (!workDurationInput) return;
 
     const workVal = Math.min(60, Math.max(5, parseInt(workDurationInput.value, 10) || 25));
@@ -303,7 +349,9 @@ function saveSettings() {
     }
 
     updateSessionUI();
-    closeSettingsModal();
+    if (closeModal) {
+        closeSettingsModal();
+    }
 }
 
 function switchSettingsTab(tab) {
@@ -373,7 +421,7 @@ async function deleteCustomSound(soundId) {
     }
 
     populateSoundOptions();
-    saveSettings();
+    saveSettings(false);
 }
 
 function populateSoundOptions() {
@@ -426,7 +474,7 @@ function handleMP3Upload(e) {
             if (soundSelect) soundSelect.value = newSound.id;
             soundSelectVal = newSound.id;
             if (uploadFilename) uploadFilename.textContent = `File di-upload: ${file.name}`;
-            saveSettings();
+            saveSettings(false);
         };
         reader.readAsDataURL(file);
         e.target.value = '';
@@ -508,9 +556,16 @@ function startTimer() {
     
     const startTime = Date.now();
     const initialTimeLeft = timeLeft;
+    let lastTrackedElapsedSec = 0;
 
     timerInterval = setInterval(() => {
         const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+        const newlyFocused = elapsedTime - lastTrackedElapsedSec;
+        if (currentMode === 'work' && newlyFocused > 0) {
+            lastTrackedElapsedSec = elapsedTime;
+            trackFocusSeconds(newlyFocused);
+        }
+
         timeLeft = initialTimeLeft - elapsedTime;
 
         if (timeLeft <= 0) {
@@ -580,15 +635,15 @@ function switchMode(mode) {
     const root = document.documentElement;
     if (mode === 'work') {
         root.style.setProperty('--accent', 'var(--accent-work)');
-        root.style.setProperty('--progress-glow', 'rgba(239, 68, 68, 0.3)');
+        root.style.setProperty('--progress-glow', 'rgba(246, 36, 64, 0.45)');
         statusDisplay.textContent = 'Focusing';
     } else if (mode === 'short') {
         root.style.setProperty('--accent', 'var(--accent-short)');
-        root.style.setProperty('--progress-glow', 'rgba(6, 182, 212, 0.3)');
+        root.style.setProperty('--progress-glow', 'rgba(255, 229, 191, 0.45)');
         statusDisplay.textContent = 'Short Break';
     } else if (mode === 'long') {
         root.style.setProperty('--accent', 'var(--accent-long)');
-        root.style.setProperty('--progress-glow', 'rgba(99, 102, 241, 0.3)');
+        root.style.setProperty('--progress-glow', 'rgba(255, 119, 66, 0.45)');
         statusDisplay.textContent = 'Long Break';
     }
 
@@ -644,7 +699,11 @@ function timerFinished() {
     showNotification();
     
     if (currentMode === 'work') {
-        openTaskVerifyModal(currentSession);
+        trackCompletedSession();
+        const hasTasksToVerify = openTaskVerifyModal(currentSession);
+        if (!hasTasksToVerify) {
+            openAnalyticsModal();
+        }
     }
     
     // Auto transition
@@ -652,6 +711,8 @@ function timerFinished() {
         skipSession();
     }, 1500);
 }
+
+let activeToneInterval = null;
 
 function stopActiveNotificationSound() {
     if (playingAudioInstance) {
@@ -661,13 +722,16 @@ function stopActiveNotificationSound() {
         } catch (e) {}
         playingAudioInstance = null;
     }
+    if (activeToneInterval) {
+        clearInterval(activeToneInterval);
+        activeToneInterval = null;
+    }
 }
 
 function playNotificationSound() {
     stopActiveNotificationSound();
 
     const selectedValue = soundSelect ? soundSelect.value : soundSelectVal;
-    const durationMs = soundDuration * 1000;
     const isRepeat = soundRepeatToggle ? soundRepeatToggle.checked : soundRepeat;
 
     const customSound = customSounds.find(s => s.id === selectedValue);
@@ -681,37 +745,35 @@ function playNotificationSound() {
             const audio = new Audio(audioUrl);
             audio.loop = isRepeat;
             playingAudioInstance = audio;
+
+            audio.onended = () => {
+                if (playingAudioInstance === audio) {
+                    playingAudioInstance = null;
+                }
+            };
+
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.catch(e => {
                     console.error('Audio playback error:', e);
-                    playTonePattern('chime', durationMs, isRepeat);
+                    playTonePattern('chime', isRepeat);
                 });
             }
-
-            setTimeout(() => {
-                if (playingAudioInstance === audio) {
-                    audio.pause();
-                    audio.currentTime = 0;
-                    playingAudioInstance = null;
-                }
-            }, durationMs);
         } catch (e) {
             console.error('Failed to play custom audio:', e);
-            playTonePattern('chime', durationMs, isRepeat);
+            playTonePattern('chime', isRepeat);
         }
     } else if (selectedValue === 'digital') {
-        playTonePattern('digital', durationMs, isRepeat);
+        playTonePattern('digital', isRepeat);
     } else if (selectedValue === 'gentle') {
-        playTonePattern('gentle', durationMs, isRepeat);
+        playTonePattern('gentle', isRepeat);
     } else {
         // Default chime
-        playTonePattern('chime', durationMs, isRepeat);
+        playTonePattern('chime', isRepeat);
     }
 }
 
-function playTonePattern(type, durationMs, isRepeat) {
-    const startTime = Date.now();
+function playTonePattern(type, isRepeat) {
     const intervalMs = type === 'digital' ? 300 : 800;
 
     function triggerOnce() {
@@ -751,13 +813,7 @@ function playTonePattern(type, durationMs, isRepeat) {
     triggerOnce();
 
     if (isRepeat) {
-        const intervalId = setInterval(() => {
-            if (Date.now() - startTime >= durationMs) {
-                clearInterval(intervalId);
-            } else {
-                triggerOnce();
-            }
-        }, intervalMs);
+        activeToneInterval = setInterval(triggerOnce, intervalMs);
     }
 }
 
@@ -824,17 +880,283 @@ function showNotification() {
     }
 }
 
+// Analytics Functions
+async function loadTodayAnalytics() {
+    const todayStr = getLocalDateString();
+    let data = null;
+    if (typeof loadDBAnalytics === 'function') {
+        data = await loadDBAnalytics(todayStr);
+    } else {
+        const saved = localStorage.getItem(`pomodoro-analytics-${todayStr}`);
+        if (saved) { try { data = JSON.parse(saved); } catch (e) {} }
+    }
+
+    if (!data) {
+        data = {
+            date: todayStr,
+            totalFocusSeconds: 0,
+            completedSessions: 0,
+            completedTasks: 0,
+            hourlyFocusSeconds: {}
+        };
+    }
+    todayAnalytics = data;
+    if (!todayAnalytics.hourlyFocusSeconds) todayAnalytics.hourlyFocusSeconds = {};
+    updateCompletedTasksCount();
+}
+
+function saveTodayAnalytics() {
+    const todayStr = getLocalDateString();
+    if (todayAnalytics.date !== todayStr) {
+        todayAnalytics = {
+            date: todayStr,
+            totalFocusSeconds: 0,
+            completedSessions: 0,
+            completedTasks: 0,
+            hourlyFocusSeconds: {}
+        };
+    }
+    todayAnalytics.updatedAt = Date.now();
+
+    if (typeof saveDBAnalytics === 'function') {
+        saveDBAnalytics(todayAnalytics);
+    } else {
+        localStorage.setItem(`pomodoro-analytics-${todayStr}`, JSON.stringify(todayAnalytics));
+    }
+}
+
+function trackFocusSeconds(secs) {
+    const todayStr = getLocalDateString();
+    if (todayAnalytics.date !== todayStr) {
+        saveTodayAnalytics();
+    }
+    const currentHour = new Date().getHours();
+    todayAnalytics.totalFocusSeconds = (todayAnalytics.totalFocusSeconds || 0) + secs;
+    todayAnalytics.hourlyFocusSeconds[currentHour] = (todayAnalytics.hourlyFocusSeconds[currentHour] || 0) + secs;
+    saveTodayAnalytics();
+}
+
+function trackCompletedSession() {
+    const todayStr = getLocalDateString();
+    if (todayAnalytics.date !== todayStr) {
+        saveTodayAnalytics();
+    }
+    todayAnalytics.completedSessions = (todayAnalytics.completedSessions || 0) + 1;
+    saveTodayAnalytics();
+}
+
+function updateCompletedTasksCount() {
+    const completedCount = tasks.filter(t => t.completed).length;
+    todayAnalytics.completedTasks = completedCount;
+    saveTodayAnalytics();
+}
+
+function openAnalyticsModal() {
+    switchAnalyticsTab('today');
+    if (analyticsModal) {
+        analyticsModal.classList.remove('hidden');
+    }
+    renderAnalyticsChart();
+}
+
+function closeAnalyticsModal() {
+    if (analyticsModal) {
+        analyticsModal.classList.add('hidden');
+    }
+}
+
+function switchAnalyticsTab(tab) {
+    currentAnalyticsTab = tab;
+    if (analyticsTabToday && analyticsTabWeek) {
+        if (tab === 'today') {
+            analyticsTabToday.classList.add('active');
+            analyticsTabWeek.classList.remove('active');
+        } else {
+            analyticsTabWeek.classList.add('active');
+            analyticsTabToday.classList.remove('active');
+        }
+    }
+    renderAnalyticsChart();
+}
+
+async function renderAnalyticsChart() {
+    if (!analyticsChartCanvas) return;
+
+    const totalMinutes = Math.round((todayAnalytics.totalFocusSeconds || 0) / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const focusText = hours > 0 ? `${hours}j ${mins}m` : `${mins}m`;
+
+    if (statTotalFocus) statTotalFocus.textContent = focusText;
+    if (statTotalSessions) statTotalSessions.textContent = `${todayAnalytics.completedSessions || 0} Sesi`;
+    if (statTotalTasks) statTotalTasks.textContent = `${todayAnalytics.completedTasks || 0} Task`;
+
+    if (analyticsChartInstance) {
+        analyticsChartInstance.destroy();
+        analyticsChartInstance = null;
+    }
+
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js is not loaded.');
+        return;
+    }
+
+    const ctx = analyticsChartCanvas.getContext('2d');
+
+    if (currentAnalyticsTab === 'today') {
+        // 1-Day View (24 Hours breakdown)
+        const labels = [];
+        const focusData = [];
+
+        for (let h = 0; h < 24; h++) {
+            labels.push(`${String(h).padStart(2, '0')}:00`);
+            const secs = todayAnalytics.hourlyFocusSeconds ? (todayAnalytics.hourlyFocusSeconds[h] || 0) : 0;
+            focusData.push(Math.round(secs / 60));
+        }
+
+        analyticsChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Fokus (Menit)',
+                    data: focusData,
+                    backgroundColor: 'rgba(246, 36, 64, 0.75)',
+                    borderColor: '#F62440',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#FFE5BF', font: { family: 'Share Tech Mono' } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.parsed.y} menit fokus`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: 'rgba(255, 229, 191, 0.7)', font: { size: 9 } },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: 'rgba(255, 229, 191, 0.7)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    }
+                }
+            }
+        });
+    } else {
+        // 7-Day View
+        let history = [];
+        if (typeof loadDBAnalyticsHistory === 'function') {
+            history = await loadDBAnalyticsHistory(7);
+        }
+
+        const daysMap = {};
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dStr = getLocalDateString(d);
+            const label = `${d.getDate()}/${d.getMonth()+1}`;
+            daysMap[dStr] = { label, focusMins: 0, sessions: 0, tasks: 0 };
+        }
+
+        history.forEach(item => {
+            if (daysMap[item.date]) {
+                daysMap[item.date].focusMins = Math.round((item.totalFocusSeconds || 0) / 60);
+                daysMap[item.date].sessions = item.completedSessions || 0;
+                daysMap[item.date].tasks = item.completedTasks || 0;
+            }
+        });
+
+        const todayStr = getLocalDateString();
+        if (daysMap[todayStr]) {
+            daysMap[todayStr].focusMins = Math.round((todayAnalytics.totalFocusSeconds || 0) / 60);
+            daysMap[todayStr].sessions = todayAnalytics.completedSessions || 0;
+            daysMap[todayStr].tasks = todayAnalytics.completedTasks || 0;
+        }
+
+        const labels = Object.values(daysMap).map(d => d.label);
+        const focusMinsData = Object.values(daysMap).map(d => d.focusMins);
+        const sessionsData = Object.values(daysMap).map(d => d.sessions);
+        const tasksData = Object.values(daysMap).map(d => d.tasks);
+
+        analyticsChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Fokus (Menit)',
+                        data: focusMinsData,
+                        backgroundColor: 'rgba(246, 36, 64, 0.7)',
+                        borderColor: '#F62440',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Sesi Selesai',
+                        data: sessionsData,
+                        backgroundColor: 'rgba(255, 229, 191, 0.7)',
+                        borderColor: '#FFE5BF',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Tugas Selesai',
+                        data: tasksData,
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: '#10b981',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#FFE5BF', font: { family: 'Share Tech Mono' } }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: 'rgba(255, 229, 191, 0.7)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: 'rgba(255, 229, 191, 0.7)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    }
+                }
+            }
+        });
+    }
+}
+
 // Task List Functions
 async function loadTasks() {
     if (typeof loadDBTasks === 'function') {
         tasks = await loadDBTasks();
         renderTasks();
+        updateCompletedTasksCount();
     } else {
         const storedTasks = localStorage.getItem('pomodoro-tasks');
         if (storedTasks) {
             try {
                 tasks = JSON.parse(storedTasks);
                 renderTasks();
+                updateCompletedTasksCount();
             } catch (e) {
                 tasks = [];
             }
@@ -1014,12 +1336,14 @@ function toggleTaskComplete(id) {
     });
     saveTasks();
     renderTasks();
+    updateCompletedTasksCount();
 }
 
 function deleteTask(id) {
     tasks = tasks.filter(task => task.id !== id);
     saveTasks();
     renderTasks();
+    updateCompletedTasksCount();
 }
 
 // Task Verification Modal Functions
@@ -1125,7 +1449,9 @@ function confirmTaskVerification() {
 
     saveTasks();
     renderTasks();
+    updateCompletedTasksCount();
     closeTaskVerifyModal();
+    openAnalyticsModal();
 }
 
 // Start
@@ -1159,6 +1485,9 @@ if (typeof module !== 'undefined' && module.exports) {
         saveSettings,
         openSettingsModal,
         closeSettingsModal,
+        openAnalyticsModal,
+        closeAnalyticsModal,
+        switchAnalyticsTab,
         openTaskSessionModal,
         closeTaskSessionModal,
         confirmAddTask,

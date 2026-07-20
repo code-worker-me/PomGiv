@@ -7,17 +7,36 @@ jest.mock('electron', () => {
             whenReady: jest.fn().mockResolvedValue(),
             on: jest.fn(),
             quit: jest.fn(),
+            setAppUserModelId: jest.fn(),
         },
         BrowserWindow: jest.fn().mockImplementation(() => {
             return {
                 loadFile: jest.fn(),
                 setProgressBar: jest.fn(),
                 on: jest.fn(),
+                once: jest.fn(),
+                show: jest.fn(),
+                hide: jest.fn(),
+                isDestroyed: jest.fn().mockReturnValue(false),
             };
         }),
         ipcMain: {
             handle: jest.fn(),
             on: jest.fn(),
+        },
+        Menu: {
+            setApplicationMenu: jest.fn(),
+            buildFromTemplate: jest.fn().mockReturnValue({}),
+        },
+        Tray: jest.fn().mockImplementation(() => {
+            return {
+                setToolTip: jest.fn(),
+                setContextMenu: jest.fn(),
+                on: jest.fn(),
+            };
+        }),
+        nativeImage: {
+            createFromPath: jest.fn().mockReturnValue({}),
         },
     };
 });

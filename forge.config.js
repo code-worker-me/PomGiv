@@ -26,12 +26,12 @@ module.exports = {
         name: "PomGiv",
         shortName: "PomGiv",
         description: "Pomodoro Timer by Giveonaldo",
-        version: "1.0.0",
+        version: "1.1.2",
         manufacturer: "Giveonaldo",
         language: 1033,
 
         // --- Aset & Tampilan ---
-        icon: "./assets/icon-1.ico", // Ikon untuk installer dan Add/Remove Programs
+        icon: "./assets/favicon.ico", // Ikon untuk installer dan Add/Remove Programs
 
         // --- Struktur Folder Instalasi ---
         programFilesFolderName: "PomGiv", // Nama folder di dalam C:\Program Files\

@@ -1,7 +1,7 @@
 // LocalDB - IndexedDB wrapper for permanent Pomodoro storage
 
 const DB_NAME = 'PomodoroLocalDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance = null;
 
@@ -28,6 +28,9 @@ function getDB() {
                 }
                 if (!db.objectStoreNames.contains('sounds')) {
                     db.createObjectStore('sounds', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('analytics')) {
+                    db.createObjectStore('analytics', { keyPath: 'date' });
                 }
             };
 
@@ -210,6 +213,96 @@ async function deleteDBSound(soundId) {
     });
 }
 
+// Analytics DB methods
+async function saveDBAnalytics(analyticsObj) {
+    if (!analyticsObj || !analyticsObj.date) return false;
+    try {
+        localStorage.setItem(`pomodoro-analytics-${analyticsObj.date}`, JSON.stringify(analyticsObj));
+    } catch (e) {}
+
+    const db = await getDB();
+    if (!db) return false;
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('analytics', 'readwrite');
+            const store = tx.objectStore('analytics');
+            store.put(analyticsObj);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
+
+async function loadDBAnalytics(dateStr) {
+    const db = await getDB();
+    if (!db) {
+        const saved = localStorage.getItem(`pomodoro-analytics-${dateStr}`);
+        return saved ? JSON.parse(saved) : null;
+    }
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('analytics', 'readonly');
+            const store = tx.objectStore('analytics');
+            const req = store.get(dateStr);
+            req.onsuccess = () => {
+                if (req.result) {
+                    resolve(req.result);
+                } else {
+                    const saved = localStorage.getItem(`pomodoro-analytics-${dateStr}`);
+                    resolve(saved ? JSON.parse(saved) : null);
+                }
+            };
+            req.onerror = () => {
+                const saved = localStorage.getItem(`pomodoro-analytics-${dateStr}`);
+                resolve(saved ? JSON.parse(saved) : null);
+            };
+        } catch (e) {
+            const saved = localStorage.getItem(`pomodoro-analytics-${dateStr}`);
+            resolve(saved ? JSON.parse(saved) : null);
+        }
+    });
+}
+
+async function loadDBAnalyticsHistory(limitDays = 7) {
+    const db = await getDB();
+    if (!db) {
+        const results = [];
+        for (let i = 0; i < limitDays; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            const saved = localStorage.getItem(`pomodoro-analytics-${dateStr}`);
+            if (saved) {
+                try { results.push(JSON.parse(saved)); } catch (e) {}
+            }
+        }
+        return results;
+    }
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction('analytics', 'readonly');
+            const store = tx.objectStore('analytics');
+            const req = store.getAll();
+            req.onsuccess = () => {
+                const all = req.result || [];
+                all.sort((a, b) => (a.date > b.date ? 1 : -1));
+                resolve(all.slice(-limitDays));
+            };
+            req.onerror = () => resolve([]);
+        } catch (e) {
+            resolve([]);
+        }
+    });
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         saveDBSettings,
@@ -218,6 +311,9 @@ if (typeof module !== 'undefined' && module.exports) {
         loadDBTasks,
         saveDBSound,
         loadDBSounds,
-        deleteDBSound
+        deleteDBSound,
+        saveDBAnalytics,
+        loadDBAnalytics,
+        loadDBAnalyticsHistory
     };
 }

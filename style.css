@@ -1,16 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&family=VT323&family=Share+Tech+Mono&display=swap');
 
 :root {
-    --bg-color: #0b0f19;
-    --card-bg: rgba(17, 24, 39, 0.6);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --accent-work: #ef4444;       /* Rose/Red */
-    --accent-short: #06b6d4;      /* Cyan */
-    --accent-long: #6366f1;       /* Indigo */
+    --bg-color: #170d10;
+    --card-bg: rgba(38, 20, 26, 0.85);
+    --card-border: rgba(246, 36, 64, 0.35);
+    --text-primary: #FFE5BF;
+    --text-secondary: rgba(255, 229, 191, 0.75);
+    --accent-work: #F62440;       /* 90s Red */
+    --accent-short: #FFE5BF;      /* Warm Peach */
+    --accent-long: #ff7742;       /* 90s Warm Orange */
     --accent: var(--accent-work);
-    --progress-glow: rgba(239, 68, 68, 0.3);
+    --progress-glow: rgba(246, 36, 64, 0.45);
 }
 
 * {
@@ -20,12 +20,12 @@
 }
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Pixelify Sans', 'Share Tech Mono', monospace, sans-serif;
     background-color: var(--bg-color);
     background-image:
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(239, 68, 68, 0.15) 0px, transparent 50%),
-        radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+        radial-gradient(at 10% 20%, rgba(246, 36, 64, 0.25) 0px, transparent 45%),
+        radial-gradient(at 90% 80%, rgba(255, 229, 191, 0.18) 0px, transparent 45%),
+        radial-gradient(at 50% 50%, rgba(246, 36, 64, 0.15) 0px, transparent 60%);
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -173,22 +173,23 @@ body {
 }
 
 .time {
-    font-family: 'Montserrat', sans-serif;
-    font-size: 52px;
-    font-weight: 800;
-    letter-spacing: -1px;
+    font-family: 'VT323', monospace;
+    font-size: 68px;
+    font-weight: 400;
+    letter-spacing: 2px;
     line-height: 1;
     color: var(--text-primary);
-    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    text-shadow: 0 0 16px var(--progress-glow), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .status-text {
     margin-top: 6px;
-    font-size: 11px;
+    font-family: 'Pixelify Sans', 'Share Tech Mono', sans-serif;
+    font-size: 13px;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 2.5px;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--accent);
 }
 
 /* Controls */
@@ -415,12 +416,17 @@ body {
     color: #ef4444;
 }
 
-/* Settings Toggle Button */
-.settings-toggle-btn {
+/* Header Action Buttons */
+.header-actions {
     position: sticky;
     top: 2%;
     left: 3%;
-    /*transform: translateY(-50%);*/
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+}
+
+.header-action-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--text-secondary);
@@ -432,13 +438,12 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    z-index: 10;
 }
 
-.settings-toggle-btn:hover {
+.header-action-btn:hover {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.12);
-    transform: rotate(30deg);
+    transform: scale(1.08);
 }
 
 /* Settings Modal */
@@ -467,8 +472,8 @@ body {
 }
 
 .modal-card {
-    background: #111827;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #1c1115;
+    border: 1px solid rgba(246, 36, 64, 0.4);
     border-radius: 24px;
     width: 90%;
     max-width: 400px;
@@ -800,7 +805,7 @@ body {
 }
 
 .setting-select option {
-    background: #111827;
+    background: #1c1115;
     color: var(--text-primary);
 }
 
@@ -948,4 +953,82 @@ body {
     font-size: 11px;
     color: var(--text-secondary);
     font-style: italic;
+}
+
+/* Analytics Modal Styles */
+.analytics-modal-card {
+    max-width: 480px;
+    width: 92%;
+}
+
+.analytics-tabs {
+    display: flex;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 12px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.analytics-tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.analytics-tab-btn.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.analytics-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.analytics-stat-card {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+}
+
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

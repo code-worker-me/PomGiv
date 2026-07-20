@@ -31,8 +31,6 @@ describe('renderer.js', () => {
                     <span id="sessions-val-display">4 sesi</span>
                 </div>
                 <div id="settings-tab-notification" class="hidden">
-                    <input id="sound-duration-input" value="3" />
-                    <span id="sound-duration-val-display">3 detik</span>
                     <select id="sound-select"></select>
                     <button id="btn-test-sound"></button>
                     <input type="checkbox" id="sound-repeat-toggle" />
@@ -61,6 +59,17 @@ describe('renderer.js', () => {
                 <div id="session-checkboxes-container"></div>
                 <button id="cancel-task-session-btn"></button>
                 <button id="confirm-add-task-btn"></button>
+            </div>
+
+            <button id="analytics-toggle-btn"></button>
+            <div id="analytics-modal" class="hidden">
+                <button id="close-analytics-btn"></button>
+                <button id="analytics-tab-today" class="active"></button>
+                <button id="analytics-tab-week"></button>
+                <span id="stat-total-focus">0m</span>
+                <span id="stat-total-sessions">0</span>
+                <span id="stat-total-tasks">0</span>
+                <canvas id="analytics-chart"></canvas>
             </div>
 
             <div id="task-verify-modal" class="hidden">
@@ -400,15 +409,16 @@ describe('renderer.js', () => {
     });
 
     test('saveSettings updates notification sound settings', () => {
-        document.getElementById('sound-duration-input').value = '5';
-        document.getElementById('sound-select').value = 'digital';
+        const soundSelect = document.getElementById('sound-select');
+        soundSelect.innerHTML = '<option value="digital">Digital Beep</option>';
+        soundSelect.value = 'digital';
         document.getElementById('sound-repeat-toggle').checked = true;
 
         renderer.saveSettings();
 
         expect(window.localStorage.setItem).toHaveBeenCalledWith(
             'pomodoro-settings',
-            expect.stringContaining('"soundDuration":5')
+            expect.stringContaining('"soundSelectVal":"digital"')
         );
     });
 
@@ -450,6 +460,15 @@ describe('renderer.js', () => {
         const deletedOpt = optionsAfter.find(opt => opt.textContent.includes('delete_me.mp3'));
         expect(deletedOpt).toBeUndefined();
         expect(soundSelect.value).toBe('chime');
+    });
+
+    test('openAnalyticsModal and closeAnalyticsModal toggle analytics modal visibility', () => {
+        const modal = document.getElementById('analytics-modal');
+        renderer.openAnalyticsModal();
+        expect(modal.classList.contains('hidden')).toBe(false);
+
+        renderer.closeAnalyticsModal();
+        expect(modal.classList.contains('hidden')).toBe(true);
     });
 });
 

@@ -5,7 +5,8 @@ const versions = {
     chrome: () => process.versions.chrome,
     electron: () => process.versions.electron,
     ping: () => ipcRenderer.invoke('ping'),
-    setProgressBar: (progress) => ipcRenderer.send('set-progress', progress)
+    setProgressBar: (progress) => ipcRenderer.send('set-progress', progress),
+    onToggleTimer: (callback) => ipcRenderer.on('toggle-timer', callback)
 };
 
 if (process.env.NODE_ENV !== 'test') {

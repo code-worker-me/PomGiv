@@ -40,6 +40,22 @@ describe('renderer.js', () => {
             <input id="task-input" />
             <button id="add-task-btn"></button>
             <ul id="task-list"></ul>
+
+            <div id="task-session-modal" class="hidden">
+                <button id="close-task-session-btn"></button>
+                <p id="task-modal-preview"></p>
+                <div id="session-checkboxes-container"></div>
+                <button id="cancel-task-session-btn"></button>
+                <button id="confirm-add-task-btn"></button>
+            </div>
+
+            <div id="task-verify-modal" class="hidden">
+                <button id="close-verify-modal-btn"></button>
+                <span id="verify-session-num">1</span>
+                <p id="verify-modal-subtitle"></p>
+                <div id="task-verify-list"></div>
+                <button id="save-verify-btn"></button>
+            </div>
         `;
 
         // Mocking window.versions
@@ -125,15 +141,118 @@ describe('renderer.js', () => {
         expect(document.getElementById('mode-work').classList.contains('active')).toBe(false);
     });
 
-    test('addNewTask adds a task to the list', () => {
+    test('addNewTask adds a task to the list with session badges', () => {
         const taskInput = document.getElementById('task-input');
         taskInput.value = 'New Task';
-        renderer.addNewTask();
+        renderer.addNewTask('New Task', [1, 3]);
 
         const taskList = document.getElementById('task-list');
         expect(taskList.children.length).toBe(1);
         expect(taskList.querySelector('.task-text').textContent).toBe('New Task');
+        expect(taskList.querySelector('.task-session-badge').textContent).toBe('Sesi 1, 3');
         expect(window.localStorage.setItem).toHaveBeenCalledWith('pomodoro-tasks', expect.any(String));
+    });
+
+    test('renderTasks sorts tasks: incomplete first, ordered by earliest session', () => {
+        renderer.addNewTask('Completed Task Session 1', [1]); // Task 1
+        renderer.addNewTask('Incomplete Task Session 3', [3]);  // Task 2
+        renderer.addNewTask('Incomplete Task Session 1', [1, 2]);// Task 3
+
+        // Mark Task 1 as completed
+        const items = document.querySelectorAll('.task-content');
+        items[0].click(); // Complete Task 1
+
+        const renderedTaskTexts = Array.from(document.querySelectorAll('.task-text')).map(el => el.textContent);
+
+        // Expected order:
+        // 1. Incomplete Task Session 1 (incomplete, min session 1)
+        // 2. Incomplete Task Session 3 (incomplete, min session 3)
+        // 3. Completed Task Session 1 (completed)
+        expect(renderedTaskTexts).toEqual([
+            'Incomplete Task Session 1',
+            'Incomplete Task Session 3',
+            'Completed Task Session 1'
+        ]);
+    });
+
+    test('openTaskSessionModal opens modal and populates session checkboxes', () => {
+        const taskInput = document.getElementById('task-input');
+        taskInput.value = 'Task with sessions';
+        renderer.openTaskSessionModal();
+
+        const modal = document.getElementById('task-session-modal');
+        expect(modal.classList.contains('hidden')).toBe(false);
+
+        const container = document.getElementById('session-checkboxes-container');
+        expect(container.children.length).toBe(4); // TOTAL_SESSIONS is 4
+    });
+
+    test('confirmAddTask adds task with selected multiple sessions', () => {
+        const taskInput = document.getElementById('task-input');
+        taskInput.value = 'Multi-session task';
+        renderer.openTaskSessionModal();
+
+        const container = document.getElementById('session-checkboxes-container');
+        const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+        checkboxes[0].checked = true; // Sesi 1
+        checkboxes[2].checked = true; // Sesi 3
+
+        renderer.confirmAddTask();
+
+        const taskList = document.getElementById('task-list');
+        expect(taskList.children.length).toBe(1);
+        expect(taskList.querySelector('.task-text').textContent).toBe('Multi-session task');
+        expect(taskList.querySelector('.task-session-badge').textContent).toBe('Sesi 1, 3');
+        expect(document.getElementById('task-session-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    test('openTaskVerifyModal opens modal for active tasks in current session', () => {
+        renderer.addNewTask('Session 1 Task', [1]);
+        const opened = renderer.openTaskVerifyModal(1);
+
+        expect(opened).toBe(true);
+        expect(document.getElementById('task-verify-modal').classList.contains('hidden')).toBe(false);
+
+        const list = document.getElementById('task-verify-list');
+        expect(list.children.length).toBe(1);
+        expect(list.querySelector('.verify-task-text').textContent).toBe('Session 1 Task');
+    });
+
+    test('confirmTaskVerification completes task when done is selected', () => {
+        renderer.addNewTask('Task to complete', [1]);
+        renderer.openTaskVerifyModal(1);
+        renderer.confirmTaskVerification();
+
+        const li = document.querySelector('.task-item');
+        expect(li.classList.contains('completed')).toBe(true);
+        expect(document.getElementById('task-verify-modal').classList.contains('hidden')).toBe(true);
+    });
+
+    test('confirmTaskVerification moves task to next session when pending selected', () => {
+        renderer.addNewTask('Task to postpone', [1]);
+        renderer.openTaskVerifyModal(1);
+
+        const pendingBtn = document.querySelector('.btn-opt-pending');
+        pendingBtn.click(); // Select pending/next session option
+
+        renderer.confirmTaskVerification();
+
+        const taskBadge = document.querySelector('.task-session-badge');
+        expect(taskBadge.textContent).toBe('Sesi 1, 2');
+    });
+
+    test('confirmTaskVerification deletes task when pending selected on last session', () => {
+        renderer.setCurrentSession(4); // Last session of 4
+        renderer.addNewTask('Task on last session', [4]);
+        renderer.openTaskVerifyModal(4);
+
+        const deleteBtn = document.querySelector('.btn-opt-delete');
+        deleteBtn.click(); // Select delete/pending option
+
+        renderer.confirmTaskVerification();
+
+        const taskList = document.getElementById('task-list');
+        expect(taskList.children.length).toBe(0);
     });
 
     test('toggleTaskComplete toggles completion status', () => {

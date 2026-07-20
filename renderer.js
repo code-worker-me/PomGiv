@@ -17,6 +17,22 @@ const taskInput = document.getElementById('task-input');
 const addTaskBtn = document.getElementById('add-task-btn');
 const taskList = document.getElementById('task-list');
 
+// Task Session Modal Elements
+const taskSessionModal = document.getElementById('task-session-modal');
+const closeTaskSessionBtn = document.getElementById('close-task-session-btn');
+const cancelTaskSessionBtn = document.getElementById('cancel-task-session-btn');
+const confirmAddTaskBtn = document.getElementById('confirm-add-task-btn');
+const sessionCheckboxesContainer = document.getElementById('session-checkboxes-container');
+const taskModalPreview = document.getElementById('task-modal-preview');
+
+// Task Verification Modal Elements
+const taskVerifyModal = document.getElementById('task-verify-modal');
+const closeVerifyModalBtn = document.getElementById('close-verify-modal-btn');
+const saveVerifyBtn = document.getElementById('save-verify-btn');
+const taskVerifyList = document.getElementById('task-verify-list');
+const verifySessionNum = document.getElementById('verify-session-num');
+const verifyModalSubtitle = document.getElementById('verify-modal-subtitle');
+
 // Settings Elements
 const settingsToggleBtn = document.getElementById('settings-toggle-btn');
 const settingsModal = document.getElementById('settings-modal');
@@ -51,6 +67,7 @@ let isRunning = false;
 
 // Task List State
 let tasks = [];
+let pendingTaskText = '';
 
 // Initialize Page
 function init() {
@@ -79,11 +96,34 @@ function setupEventListeners() {
     if (skipBtn) skipBtn.addEventListener('click', skipSession);
 
     // Tasks
-    if (addTaskBtn) addTaskBtn.addEventListener('click', addNewTask);
+    if (addTaskBtn) addTaskBtn.addEventListener('click', openTaskSessionModal);
     if (taskInput) {
         taskInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                addNewTask();
+                openTaskSessionModal();
+            }
+        });
+    }
+
+    // Task Session Modal
+    if (closeTaskSessionBtn) closeTaskSessionBtn.addEventListener('click', closeTaskSessionModal);
+    if (cancelTaskSessionBtn) cancelTaskSessionBtn.addEventListener('click', closeTaskSessionModal);
+    if (confirmAddTaskBtn) confirmAddTaskBtn.addEventListener('click', confirmAddTask);
+    if (taskSessionModal) {
+        taskSessionModal.addEventListener('click', (e) => {
+            if (e.target === taskSessionModal) {
+                closeTaskSessionModal();
+            }
+        });
+    }
+
+    // Task Verification Modal
+    if (closeVerifyModalBtn) closeVerifyModalBtn.addEventListener('click', closeTaskVerifyModal);
+    if (saveVerifyBtn) saveVerifyBtn.addEventListener('click', confirmTaskVerification);
+    if (taskVerifyModal) {
+        taskVerifyModal.addEventListener('click', (e) => {
+            if (e.target === taskVerifyModal) {
+                closeTaskVerifyModal();
             }
         });
     }
@@ -393,6 +433,10 @@ function timerFinished() {
     playChime();
     showNotification();
     
+    if (currentMode === 'work') {
+        openTaskVerifyModal(currentSession);
+    }
+    
     // Auto transition
     setTimeout(() => {
         skipSession();
@@ -479,10 +523,31 @@ function saveTasks() {
     localStorage.setItem('pomodoro-tasks', JSON.stringify(tasks));
 }
 
+function getMinSession(task) {
+    if (task.sessions && Array.isArray(task.sessions) && task.sessions.length > 0) {
+        return Math.min(...task.sessions);
+    }
+    return 999;
+}
+
 function renderTasks() {
+    if (!taskList) return;
     taskList.innerHTML = '';
     
-    tasks.forEach(task => {
+    // Sort tasks: incomplete first, then by earliest session
+    const sortedTasks = [...tasks].sort((a, b) => {
+        if (a.completed !== b.completed) {
+            return a.completed ? 1 : -1;
+        }
+        const minA = getMinSession(a);
+        const minB = getMinSession(b);
+        if (minA !== minB) {
+            return minA - minB;
+        }
+        return 0;
+    });
+
+    sortedTasks.forEach(task => {
         const li = document.createElement('li');
         li.className = `task-item ${task.completed ? 'completed' : ''}`;
         li.dataset.id = task.id;
@@ -504,6 +569,17 @@ function renderTasks() {
         contentDiv.appendChild(checkbox);
         contentDiv.appendChild(span);
 
+        if (task.sessions && Array.isArray(task.sessions) && task.sessions.length > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'task-session-badge';
+            if (task.sessions.length === TOTAL_SESSIONS) {
+                badge.textContent = 'Semua Sesi';
+            } else {
+                badge.textContent = `Sesi ${task.sessions.join(', ')}`;
+            }
+            contentDiv.appendChild(badge);
+        }
+
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn-delete-task';
         deleteBtn.innerHTML = '&times;'; // Cross character
@@ -519,22 +595,87 @@ function renderTasks() {
     });
 }
 
-function addNewTask() {
-    const text = taskInput.value.trim();
+function openTaskSessionModal() {
+    const text = taskInput ? taskInput.value.trim() : '';
     if (!text) return;
+
+    pendingTaskText = text;
+    if (taskModalPreview) {
+        taskModalPreview.textContent = `Pilih sesi untuk mengerjakan "${text}":`;
+    }
+
+    if (sessionCheckboxesContainer) {
+        sessionCheckboxesContainer.innerHTML = '';
+        for (let i = 1; i <= TOTAL_SESSIONS; i++) {
+            const label = document.createElement('label');
+            label.className = 'session-checkbox-label';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = i;
+            if (i === currentSession) {
+                checkbox.checked = true;
+            }
+
+            const span = document.createElement('span');
+            span.textContent = `Sesi ${i}`;
+
+            label.appendChild(checkbox);
+            label.appendChild(span);
+            sessionCheckboxesContainer.appendChild(label);
+        }
+    }
+
+    if (taskSessionModal) {
+        taskSessionModal.classList.remove('hidden');
+    }
+}
+
+function closeTaskSessionModal() {
+    pendingTaskText = '';
+    if (taskSessionModal) {
+        taskSessionModal.classList.add('hidden');
+    }
+}
+
+function confirmAddTask() {
+    if (!pendingTaskText) return;
+
+    const selectedSessions = [];
+    if (sessionCheckboxesContainer) {
+        const checkedInputs = sessionCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
+        checkedInputs.forEach(cb => selectedSessions.push(parseInt(cb.value, 10)));
+    }
+
+    const sessionsToSave = selectedSessions.length > 0 ? selectedSessions : [currentSession];
+
+    addNewTask(pendingTaskText, sessionsToSave);
+    closeTaskSessionModal();
+}
+
+function addNewTask(textOverride, sessionsOverride) {
+    const text = typeof textOverride === 'string' ? textOverride.trim() : (taskInput ? taskInput.value.trim() : '');
+    if (!text) return;
+
+    const taskSessions = Array.isArray(sessionsOverride) && sessionsOverride.length > 0
+        ? sessionsOverride
+        : [currentSession];
 
     const newTask = {
         id: Date.now().toString(),
         text: text,
-        completed: false
+        completed: false,
+        sessions: taskSessions
     };
 
     tasks.push(newTask);
     saveTasks();
     renderTasks();
     
-    taskInput.value = '';
-    taskInput.focus();
+    if (taskInput) {
+        taskInput.value = '';
+        taskInput.focus();
+    }
 }
 
 function toggleTaskComplete(id) {
@@ -552,6 +693,112 @@ function deleteTask(id) {
     tasks = tasks.filter(task => task.id !== id);
     saveTasks();
     renderTasks();
+}
+
+// Task Verification Modal Functions
+let verifyingSessionNum = 1;
+
+function openTaskVerifyModal(sessionNum) {
+    const activeSessionTasks = tasks.filter(task => !task.completed && task.sessions && task.sessions.includes(sessionNum));
+    if (activeSessionTasks.length === 0) return false;
+
+    verifyingSessionNum = sessionNum;
+    if (verifySessionNum) {
+        verifySessionNum.textContent = sessionNum;
+    }
+
+    if (taskVerifyList) {
+        taskVerifyList.innerHTML = '';
+        activeSessionTasks.forEach(task => {
+            const item = document.createElement('div');
+            item.className = 'verify-item';
+            item.dataset.id = task.id;
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'verify-task-text';
+            textSpan.textContent = task.text;
+
+            const optionsDiv = document.createElement('div');
+            optionsDiv.className = 'verify-options';
+
+            const btnDone = document.createElement('button');
+            btnDone.className = 'btn-verify-opt btn-opt-done active';
+            btnDone.dataset.status = 'done';
+            btnDone.textContent = '✓ Selesai';
+
+            const btnPending = document.createElement('button');
+            btnPending.dataset.status = 'pending';
+            if (sessionNum < TOTAL_SESSIONS) {
+                btnPending.className = 'btn-verify-opt btn-opt-pending';
+                btnPending.textContent = `→ Sesi ${sessionNum + 1}`;
+            } else {
+                btnPending.className = 'btn-verify-opt btn-opt-delete';
+                btnPending.textContent = '× Hapus Task';
+            }
+
+            btnDone.addEventListener('click', () => {
+                btnDone.classList.add('active');
+                btnPending.classList.remove('active');
+            });
+
+            btnPending.addEventListener('click', () => {
+                btnPending.classList.add('active');
+                btnDone.classList.remove('active');
+            });
+
+            optionsDiv.appendChild(btnDone);
+            optionsDiv.appendChild(btnPending);
+
+            item.appendChild(textSpan);
+            item.appendChild(optionsDiv);
+
+            taskVerifyList.appendChild(item);
+        });
+    }
+
+    if (taskVerifyModal) {
+        taskVerifyModal.classList.remove('hidden');
+    }
+    return true;
+}
+
+function closeTaskVerifyModal() {
+    if (taskVerifyModal) {
+        taskVerifyModal.classList.add('hidden');
+    }
+}
+
+function confirmTaskVerification() {
+    if (taskVerifyList) {
+        const items = taskVerifyList.querySelectorAll('.verify-item');
+        items.forEach(item => {
+            const taskId = item.dataset.id;
+            const activeOpt = item.querySelector('.btn-verify-opt.active');
+            const status = activeOpt ? activeOpt.dataset.status : 'done';
+
+            const task = tasks.find(t => t.id === taskId);
+            if (task) {
+                if (status === 'done') {
+                    task.completed = true;
+                } else if (status === 'pending') {
+                    if (verifyingSessionNum < TOTAL_SESSIONS) {
+                        const nextSession = verifyingSessionNum + 1;
+                        if (!task.sessions.includes(nextSession)) {
+                            task.sessions.push(nextSession);
+                            task.sessions.sort((a, b) => a - b);
+                        }
+                    } else {
+                        // Sesi habis & task belum selesai -> hapus task
+                        tasks = tasks.filter(t => t.id !== taskId);
+                    }
+                }
+            }
+        });
+    }
+
+    saveTasks();
+    renderTasks();
+    closeTaskVerifyModal();
 }
 
 // Start
@@ -585,6 +832,12 @@ if (typeof module !== 'undefined' && module.exports) {
         saveSettings,
         openSettingsModal,
         closeSettingsModal,
+        openTaskSessionModal,
+        closeTaskSessionModal,
+        confirmAddTask,
+        openTaskVerifyModal,
+        closeTaskVerifyModal,
+        confirmTaskVerification,
         getTotalSessions: () => TOTAL_SESSIONS,
         setTotalSessions: (val) => { TOTAL_SESSIONS = val; },
         getCurrentSession: () => currentSession,

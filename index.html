@@ -130,6 +130,45 @@
             </div>
         </div>
     </div>
+
+    <!-- Task Session Modal -->
+    <div class="modal-overlay hidden" id="task-session-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Pilih Sesi Task</h3>
+                <button class="btn-close-modal" id="close-task-session-btn" title="Batal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="task-modal-subtitle" id="task-modal-preview">Pilih sesi untuk mengerjakan task ini:</p>
+                <div class="session-checkboxes-container" id="session-checkboxes-container">
+                    <!-- Session options dynamically populated -->
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-actions">
+                <button class="btn-modal-cancel" id="cancel-task-session-btn">Batal</button>
+                <button class="btn-save-settings" id="confirm-add-task-btn">Tambah Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Verification Modal -->
+    <div class="modal-overlay hidden" id="task-verify-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Verifikasi Task Sesi <span id="verify-session-num">1</span></h3>
+                <button class="btn-close-modal" id="close-verify-modal-btn" title="Tutup">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="task-modal-subtitle" id="verify-modal-subtitle">Sesi selesai! Apakah task di bawah ini sudah selesai?</p>
+                <div class="task-verify-list" id="task-verify-list">
+                    <!-- Dynamic task verification items -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-save-settings" id="save-verify-btn">Simpan & Lanjutkan</button>
+            </div>
+        </div>
+    </div>
 </body>
 <script src="./renderer.js"></script>
 

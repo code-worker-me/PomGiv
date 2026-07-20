@@ -13,6 +13,21 @@ describe('renderer.js', () => {
         document.body.innerHTML = `
             <div id="time-display">25:00</div>
             <div id="status-display">Focusing</div>
+            <div id="session-display">Session 1 of 4</div>
+            <div id="session-dots"></div>
+            <button id="settings-toggle-btn"></button>
+            <div id="settings-modal" class="hidden">
+                <button id="close-settings-btn"></button>
+                <input id="work-duration-input" value="25" />
+                <input id="short-duration-input" value="5" />
+                <input id="long-duration-input" value="15" />
+                <input id="total-sessions-input" value="4" />
+                <span id="work-val-display">25 min</span>
+                <span id="short-val-display">5 min</span>
+                <span id="long-val-display">15 min</span>
+                <span id="sessions-val-display">4 sesi</span>
+                <button id="save-settings-btn"></button>
+            </div>
             <button id="play-btn" title="Start">
                 <div id="play-icon"></div>
             </button>
@@ -184,13 +199,79 @@ describe('renderer.js', () => {
     test('showNotification calls Notification constructor when permitted', () => {
         renderer.switchMode('work');
         renderer.showNotification();
-        expect(global.Notification).toHaveBeenCalledWith('Work Session Ended!', expect.any(Object));
+        expect(global.Notification).toHaveBeenCalledWith('Work Session 1 Ended!', expect.any(Object));
     });
 
     test('timerFinished plays chime and shows notification', () => {
-        // We can't easily test audio context results, but we can check if it runs without error
-        // and if it calls showNotification (indirectly via mock)
         renderer.timerFinished();
         expect(global.Notification).toHaveBeenCalled();
+    });
+
+    test('4-session cycle transitions correctly', () => {
+        // Session 1: Work -> Short Break
+        renderer.switchMode('work');
+        expect(renderer.getCurrentSession()).toBe(1);
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Short Break');
+        expect(renderer.getCurrentSession()).toBe(1);
+
+        // Short Break 1 -> Session 2 Work
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Focusing');
+        expect(renderer.getCurrentSession()).toBe(2);
+
+        // Session 2 Work -> Short Break 2
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Short Break');
+
+        // Short Break 2 -> Session 3 Work
+        renderer.skipSession();
+        expect(renderer.getCurrentSession()).toBe(3);
+
+        // Session 3 Work -> Short Break 3
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Short Break');
+
+        // Short Break 3 -> Session 4 Work
+        renderer.skipSession();
+        expect(renderer.getCurrentSession()).toBe(4);
+
+        // Session 4 Work -> Long Break
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Long Break');
+        expect(renderer.getCurrentSession()).toBe(4);
+
+        // Long Break -> Session 1 Work
+        renderer.skipSession();
+        expect(document.getElementById('status-display').textContent).toBe('Focusing');
+        expect(renderer.getCurrentSession()).toBe(1);
+    });
+
+    test('openSettingsModal and closeSettingsModal toggle modal visibility', () => {
+        const modal = document.getElementById('settings-modal');
+        renderer.openSettingsModal();
+        expect(modal.classList.contains('hidden')).toBe(false);
+
+        renderer.closeSettingsModal();
+        expect(modal.classList.contains('hidden')).toBe(true);
+    });
+
+    test('saveSettings updates DURATIONS and TOTAL_SESSIONS and persists to localStorage', () => {
+        document.getElementById('work-duration-input').value = '45';
+        document.getElementById('short-duration-input').value = '10';
+        document.getElementById('long-duration-input').value = '30';
+        document.getElementById('total-sessions-input').value = '6';
+
+        renderer.saveSettings();
+
+        expect(renderer.DURATIONS.work).toBe(45 * 60);
+        expect(renderer.DURATIONS.short).toBe(10 * 60);
+        expect(renderer.DURATIONS.long).toBe(30 * 60);
+        expect(renderer.getTotalSessions()).toBe(6);
+        expect(window.localStorage.setItem).toHaveBeenCalledWith(
+            'pomodoro-settings',
+            JSON.stringify({ work: 45, short: 10, long: 30, totalSessions: 6 })
+        );
+        expect(document.getElementById('time-display').textContent).toBe('45:00');
     });
 });

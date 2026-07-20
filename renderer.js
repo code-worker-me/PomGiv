@@ -17,12 +17,31 @@ const taskInput = document.getElementById('task-input');
 const addTaskBtn = document.getElementById('add-task-btn');
 const taskList = document.getElementById('task-list');
 
+// Settings Elements
+const settingsToggleBtn = document.getElementById('settings-toggle-btn');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const saveSettingsBtn = document.getElementById('save-settings-btn');
+
+const workDurationInput = document.getElementById('work-duration-input');
+const shortDurationInput = document.getElementById('short-duration-input');
+const longDurationInput = document.getElementById('long-duration-input');
+const totalSessionsInput = document.getElementById('total-sessions-input');
+
+const workValDisplay = document.getElementById('work-val-display');
+const shortValDisplay = document.getElementById('short-val-display');
+const longValDisplay = document.getElementById('long-val-display');
+const sessionsValDisplay = document.getElementById('sessions-val-display');
+
 // Timer State Configuration (in seconds)
-const DURATIONS = {
+let DURATIONS = {
     work: 25 * 60,
     short: 5 * 60,
     long: 15 * 60
 };
+
+let TOTAL_SESSIONS = 4;
+let currentSession = 1;
 
 let currentMode = 'work';
 let timeLeft = DURATIONS.work;
@@ -36,7 +55,9 @@ let tasks = [];
 // Initialize Page
 function init() {
     loadTasks();
+    loadSettings();
     updateDisplay();
+    updateSessionUI();
     setupEventListeners();
     
     // Request notification permissions
@@ -48,22 +69,133 @@ function init() {
 // Event Listeners Setup
 function setupEventListeners() {
     // Mode Switchers
-    modeWorkBtn.addEventListener('click', () => switchMode('work'));
-    modeShortBtn.addEventListener('click', () => switchMode('short'));
-    modeLongBtn.addEventListener('click', () => switchMode('long'));
+    if (modeWorkBtn) modeWorkBtn.addEventListener('click', () => switchMode('work'));
+    if (modeShortBtn) modeShortBtn.addEventListener('click', () => switchMode('short'));
+    if (modeLongBtn) modeLongBtn.addEventListener('click', () => switchMode('long'));
 
     // Controls
-    playBtn.addEventListener('click', toggleTimer);
-    resetBtn.addEventListener('click', resetTimer);
-    skipBtn.addEventListener('click', skipSession);
+    if (playBtn) playBtn.addEventListener('click', toggleTimer);
+    if (resetBtn) resetBtn.addEventListener('click', resetTimer);
+    if (skipBtn) skipBtn.addEventListener('click', skipSession);
 
     // Tasks
-    addTaskBtn.addEventListener('click', addNewTask);
-    taskInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addNewTask();
+    if (addTaskBtn) addTaskBtn.addEventListener('click', addNewTask);
+    if (taskInput) {
+        taskInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addNewTask();
+            }
+        });
+    }
+
+    // Settings Modal
+    if (settingsToggleBtn) settingsToggleBtn.addEventListener('click', openSettingsModal);
+    if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeSettingsModal);
+    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
+
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                closeSettingsModal();
+            }
+        });
+    }
+
+    // Live update range badge text on input change
+    if (workDurationInput && workValDisplay) {
+        workDurationInput.addEventListener('input', (e) => workValDisplay.textContent = `${e.target.value} min`);
+    }
+    if (shortDurationInput && shortValDisplay) {
+        shortDurationInput.addEventListener('input', (e) => shortValDisplay.textContent = `${e.target.value} min`);
+    }
+    if (longDurationInput && longValDisplay) {
+        longDurationInput.addEventListener('input', (e) => longValDisplay.textContent = `${e.target.value} min`);
+    }
+    if (totalSessionsInput && sessionsValDisplay) {
+        totalSessionsInput.addEventListener('input', (e) => sessionsValDisplay.textContent = `${e.target.value} sesi`);
+    }
+}
+
+// Settings Persistence and Management
+function loadSettings() {
+    const savedSettings = localStorage.getItem('pomodoro-settings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            if (settings.work) DURATIONS.work = Math.min(60, Math.max(5, settings.work)) * 60;
+            if (settings.short) DURATIONS.short = Math.min(15, Math.max(1, settings.short)) * 60;
+            if (settings.long) DURATIONS.long = Math.min(60, Math.max(5, settings.long)) * 60;
+            if (settings.totalSessions) TOTAL_SESSIONS = Math.min(8, Math.max(1, settings.totalSessions));
+        } catch (e) {
+            console.error("Failed to parse pomodoro-settings:", e);
         }
-    });
+    }
+
+    timeLeft = DURATIONS[currentMode];
+    totalDuration = DURATIONS[currentMode];
+}
+
+function syncSettingsInputUI() {
+    if (!workDurationInput) return;
+    
+    const workMin = Math.floor(DURATIONS.work / 60);
+    const shortMin = Math.floor(DURATIONS.short / 60);
+    const longMin = Math.floor(DURATIONS.long / 60);
+
+    workDurationInput.value = workMin;
+    shortDurationInput.value = shortMin;
+    longDurationInput.value = longMin;
+    totalSessionsInput.value = TOTAL_SESSIONS;
+
+    if (workValDisplay) workValDisplay.textContent = `${workMin} min`;
+    if (shortValDisplay) shortValDisplay.textContent = `${shortMin} min`;
+    if (longValDisplay) longValDisplay.textContent = `${longMin} min`;
+    if (sessionsValDisplay) sessionsValDisplay.textContent = `${TOTAL_SESSIONS} sesi`;
+}
+
+function saveSettings() {
+    if (!workDurationInput) return;
+
+    const workVal = Math.min(60, Math.max(5, parseInt(workDurationInput.value, 10) || 25));
+    const shortVal = Math.min(15, Math.max(1, parseInt(shortDurationInput.value, 10) || 5));
+    const longVal = Math.min(60, Math.max(5, parseInt(longDurationInput.value, 10) || 15));
+    const sessionsVal = Math.min(8, Math.max(1, parseInt(totalSessionsInput.value, 10) || 4));
+
+    DURATIONS.work = workVal * 60;
+    DURATIONS.short = shortVal * 60;
+    DURATIONS.long = longVal * 60;
+    TOTAL_SESSIONS = sessionsVal;
+
+    localStorage.setItem('pomodoro-settings', JSON.stringify({
+        work: workVal,
+        short: shortVal,
+        long: longVal,
+        totalSessions: sessionsVal
+    }));
+
+    if (currentSession > TOTAL_SESSIONS) {
+        currentSession = TOTAL_SESSIONS;
+    }
+
+    if (!isRunning) {
+        resetTimer();
+    }
+
+    updateSessionUI();
+    closeSettingsModal();
+}
+
+function openSettingsModal() {
+    syncSettingsInputUI();
+    if (settingsModal) {
+        settingsModal.classList.remove('hidden');
+    }
+}
+
+function closeSettingsModal() {
+    if (settingsModal) {
+        settingsModal.classList.add('hidden');
+    }
 }
 
 // Timer Display and CSS update
@@ -164,11 +296,20 @@ function resetTimer() {
 
 function skipSession() {
     pauseTimer();
-    // Auto cycle mode
+    // Auto cycle mode and session according to 4-session rule
     if (currentMode === 'work') {
-        // Offer short break by default
-        switchMode('short');
-    } else {
+        if (currentSession < TOTAL_SESSIONS) {
+            switchMode('short');
+        } else {
+            switchMode('long');
+        }
+    } else if (currentMode === 'short') {
+        if (currentSession < TOTAL_SESSIONS) {
+            currentSession++;
+        }
+        switchMode('work');
+    } else if (currentMode === 'long') {
+        currentSession = 1;
         switchMode('work');
     }
 }
@@ -201,7 +342,37 @@ function switchMode(mode) {
         statusDisplay.textContent = 'Long Break';
     }
 
+    updateSessionUI();
     resetTimer();
+}
+
+function updateSessionUI() {
+    const sessionDisplay = document.getElementById('session-display');
+    const sessionDots = document.getElementById('session-dots');
+
+    if (sessionDisplay) {
+        if (currentMode === 'work') {
+            sessionDisplay.textContent = `Session ${currentSession} of ${TOTAL_SESSIONS}`;
+        } else if (currentMode === 'short') {
+            sessionDisplay.textContent = `Short Break (Session ${currentSession}/${TOTAL_SESSIONS})`;
+        } else if (currentMode === 'long') {
+            sessionDisplay.textContent = `Long Break (Session ${currentSession}/${TOTAL_SESSIONS})`;
+        }
+    }
+
+    if (sessionDots) {
+        sessionDots.innerHTML = '';
+        for (let i = 1; i <= TOTAL_SESSIONS; i++) {
+            const dot = document.createElement('span');
+            dot.className = 'dot';
+            if (i < currentSession) {
+                dot.classList.add('completed');
+            } else if (i === currentSession) {
+                dot.classList.add('active');
+            }
+            sessionDots.appendChild(dot);
+        }
+    }
 }
 
 function updatePlayIcon(playing) {
@@ -265,11 +436,25 @@ function playChime() {
 
 function showNotification() {
     if (Notification.permission === 'granted') {
-        const title = currentMode === 'work' ? "Work Session Ended!" : "Break Ended!";
-        const message = currentMode === 'work' 
-            ? "Great job! Time to take a short break." 
-            : "Break is over. Ready to focus again?";
-            
+        let title = "";
+        let message = "";
+
+        if (currentMode === 'work') {
+            if (currentSession < TOTAL_SESSIONS) {
+                title = `Work Session ${currentSession} Ended!`;
+                message = `Great job! Time to take a 5-minute short break.`;
+            } else {
+                title = `Session ${TOTAL_SESSIONS} Ended!`;
+                message = `Awesome work completing ${TOTAL_SESSIONS} sessions! Time for a long break.`;
+            }
+        } else if (currentMode === 'short') {
+            title = `Short Break Ended!`;
+            message = `Ready for Session ${currentSession + 1}? Let's focus!`;
+        } else {
+            title = `Long Break Ended!`;
+            message = `Cycle complete! Ready to start a new 4-session cycle?`;
+        }
+
         new Notification(title, {
             body: message,
             silent: true // We play our custom chime instead
@@ -394,6 +579,15 @@ if (typeof module !== 'undefined' && module.exports) {
         deleteTask,
         DURATIONS,
         showNotification,
-        playChime
+        playChime,
+        updateSessionUI,
+        loadSettings,
+        saveSettings,
+        openSettingsModal,
+        closeSettingsModal,
+        getTotalSessions: () => TOTAL_SESSIONS,
+        setTotalSessions: (val) => { TOTAL_SESSIONS = val; },
+        getCurrentSession: () => currentSession,
+        setCurrentSession: (val) => { currentSession = val; }
     };
 }

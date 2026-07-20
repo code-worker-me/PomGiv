@@ -13,7 +13,8 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "electron .",
+    "start:forge": "electron-forge start",
     "test": "jest",
     "package": "electron-forge package",
     "make": "electron-forge make",
@@ -30,7 +31,9 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/publisher-github": "^7.11.2",
     "@electron/fuses": "^1.8.0",
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
